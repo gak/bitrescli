@@ -11,7 +11,7 @@ import (
 )
 
 type CLI struct {
-	BaseURI string `required:"true"`
+	BaseURI string `required:"true" arg:"true"`
 	Debug   bool
 
 	Tx struct {
