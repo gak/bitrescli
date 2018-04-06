@@ -16,9 +16,16 @@ type TxInput struct {
 }
 
 type TxOutput struct {
-	Height int
-	Value  float64
-	N      int
+	Height       int
+	Value        float64
+	Txid         string
+	N            int
+	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
+}
+
+type ScriptPubKey struct {
+	Addresses []string
+	Type      string
 }
 
 func (client Client) Tx(hash string) (Tx, error) {
@@ -30,7 +37,9 @@ func (client Client) Tx(hash string) (Tx, error) {
 // Block
 
 type Block struct {
-	Tx []Tx
+	Height int
+	Hash   string
+	Tx     []Tx
 }
 
 func (client Client) Block(hash string) (Block, error) {
@@ -51,8 +60,33 @@ type utxoResponse struct {
 	Utxos  []TxOutput
 }
 
-func (client Client) IsSpent(utxos []Utxo) ([]bool, error) {
-	var isSpent []bool
+func (client Client) BulkUtxos(utxos []Utxo) ([]TxOutput, error) {
+	var collected []TxOutput
+
+	// This is the most you can request at once
+	chunkSize := 15
+
+	for start := 0; start < len(utxos); start += chunkSize {
+		end := start + chunkSize
+
+		if end > len(utxos) {
+			end = len(utxos)
+		}
+
+		chunk := utxos[start:end]
+
+		response, err := client.Utxos(chunk)
+		if err != nil {
+			return collected, err
+		}
+		collected = append(collected, response...)
+	}
+
+	return collected, nil
+}
+
+func (client Client) Utxos(utxos []Utxo) ([]TxOutput, error) {
+	var collected []TxOutput
 
 	// checkmempool is "required" because of a bug
 	// https://github.com/bitcoin/bitcoin/pull/12717
@@ -61,14 +95,29 @@ func (client Client) IsSpent(utxos []Utxo) ([]bool, error) {
 	response := utxoResponse{}
 	err := client.request("GET", url, &response)
 	if err != nil {
-		return isSpent, nil
+		return collected, err
 	}
 
-	for _, char := range response.Bitmap {
-		isSpent = append(isSpent, char == '1')
+	outputIndex := 0
+
+	for idx, char := range response.Bitmap {
+		if char == '1' {
+			reference := utxos[idx]
+			output := response.Utxos[outputIndex]
+
+			// N is not specified when calling utxos
+			output.N = reference.Vout
+
+			// Tack on the Txid for reference
+			output.Txid = reference.TxId
+
+			collected = append(collected, output)
+
+			outputIndex ++
+		}
 	}
 
-	return isSpent, err
+	return collected, err
 }
 
 func utxoListToUri(utxos []Utxo) string {

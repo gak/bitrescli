@@ -54,7 +54,7 @@ func main() {
 			utxos = append(utxos, bitrescli.Utxo{TxId: bits[0], Vout: int(vout)})
 		}
 
-		dump(client.IsSpent(utxos))
+		dump(client.Utxos(utxos))
 	}
 }
 

@@ -71,8 +71,6 @@ func (client Client) request(method string, endpoint string, s interface{}) erro
 		return err
 	}
 
-	fmt.Println(resp.StatusCode)
-
 	if client.Debug {
 		fmt.Println("Body:", string(body))
 	}
